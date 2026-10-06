@@ -22,8 +22,13 @@ func (c *Clock) Tick(node int) {
 
 // Receive 收到一条消息，做合并再自增。
 func (c *Clock) Receive(node int, msgID string, remote []int) {
+	for _, id := range c.Seen {
+		if id == msgID {
+			return
+		}
+	}
 	for i := range c.Vec {
-		if i < len(remote) {
+		if i < len(remote) && remote[i] > c.Vec[i] {
 			c.Vec[i] = remote[i]
 		}
 	}
@@ -33,15 +38,27 @@ func (c *Clock) Receive(node int, msgID string, remote []int) {
 
 // Before 判定 a 是否严格早于 b。
 func Before(a, b []int) bool {
-	for i := range a {
-		if i >= len(b) {
+	n := len(a)
+	if len(b) > n {
+		n = len(b)
+	}
+	less := false
+	for i := 0; i < n; i++ {
+		av, bv := 0, 0
+		if i < len(a) {
+			av = a[i]
+		}
+		if i < len(b) {
+			bv = b[i]
+		}
+		if av > bv {
 			return false
 		}
-		if a[i] < b[i] {
-			return true
+		if av < bv {
+			less = true
 		}
 	}
-	return false
+	return less
 }
 
 // Order 给出两个时钟的关系：before、after、equal 或 concurrent。
@@ -57,19 +74,15 @@ func Order(a, b []int) string {
 
 // Dedup 按消息号去重，返回去重后的条数。
 func Dedup(ids []string, c *Counter) int {
-	seen := []string{}
+	seen := make(map[string]struct{}, len(ids))
+	unique := 0
 	for _, id := range ids {
-		dup := false
-		for _, item := range seen {
-			c.Scanned++
-			if item == id {
-				dup = true
-				break
-			}
+		c.Scanned++
+		if _, ok := seen[id]; ok {
+			continue
 		}
-		if !dup {
-			seen = append(seen, id)
-		}
+		seen[id] = struct{}{}
+		unique++
 	}
-	return len(seen)
+	return unique
 }
